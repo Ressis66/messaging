@@ -27,13 +27,60 @@ import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 
-
+@IntegrationComponentScan
+@SuppressWarnings({ "resource", "Duplicates", "InfiniteLoopStatement" })
+@ComponentScan
+@Configuration
+@EnableIntegration
 public class MessagingApplication {
 
+
+	@Bean
+	public QueueChannel caterpillarChannel() {
+		return MessageChannels.queue(10).get();
+	}
+
+	@Bean
+	public PublishSubscribeChannel butterflyChannel() {
+		return MessageChannels.publishSubscribe().get();
+	}
+
+	@Bean
+	public IntegrationFlow transformFlow() {
+		return IntegrationFlows.from("caterpillarChannel")
+				.handle("butterflyService", "grow")
+
+				.channel("butterflyChannel")
+				.get();
+	}
+
+	@Bean(name = PollerMetadata.DEFAULT_POLLER)
+	public PollerMetadata poller() {
+		return Pollers.fixedRate(100).maxMessagesPerPoll(2).get();
+	}
 
 
 	public static void main(String[] args) throws Exception {
 
+		AbstractApplicationContext ctx = new AnnotationConfigApplicationContext(MessagingApplication.class);
+
+		InterfaceGetway interfaceGetway = ctx.getBean(InterfaceGetway.class);
+		ForkJoinPool pool = ForkJoinPool.commonPool();
+
+		while (true) {
+			Thread.sleep(7000);
+
+			pool.execute(() -> {
+				Caterpillar caterpillar1 = new Caterpillar("asa");
+				List<Caterpillar> items = new ArrayList<>();
+				items.add(caterpillar1);
+				Collection<Butterfly> butterflies = interfaceGetway.process(items);
+				System.out.println("Ready butterflies: " + butterflies.stream()
+						.map(Butterfly::getName)
+						.collect(Collectors.joining(",")));
+			});
+		}
 
 	}
+
 }
